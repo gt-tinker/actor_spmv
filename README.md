@@ -4,6 +4,9 @@ This repository consists of SpMV kernels built on PETSc and HClib Actor runtimes
 # Directory Structure
 ```tree
 ├── README.md
+├── datasets
+│   ├── data.mtx
+│   └── data.petsc
 ├── scripts
 │   ├── convert_data_petsc.sh
 │   ├── hclib_install.sh
@@ -12,13 +15,12 @@ This repository consists of SpMV kernels built on PETSc and HClib Actor runtimes
 │   ├── actors
 │   └── petsc
 │       ├── Makefile
-│       └── main.cpp
+│       ├── main.cpp
+│       └── run.sh
 └── test
-    ├── data.mtx
-    ├── data.petsc
     └── test_petsc_data.cpp
 
-5 directories, 10 files
+6 directories, 12 files
 ```
 
 # Installation and Builds of Programs

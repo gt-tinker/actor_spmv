@@ -2,11 +2,9 @@
 #include <petscmat.h>
 #include <petscvec.h>
 #include <mpi.h>
-#include <stdlib.h> // Required for rand() and srand()
+#include <stdlib.h>
 
 #define NUM_RUNS 10
-
-#include <petscmat.h>
 
 PetscErrorCode MatSumEntries(Mat A, PetscScalar *sum)
 {
@@ -62,11 +60,6 @@ int main(int argc, char **argv)
     return 1;
   }
 
-  if (!rank) {
-    // double check we are using 64 bit integers
-    printf("Size of PetscInt: %zu bytes\n", sizeof(PetscInt));
-  }
-
   /* Load matrix A from PETSc binary */
   {
     PetscViewer viewer;
@@ -77,18 +70,10 @@ int main(int argc, char **argv)
     PetscCall(PetscViewerDestroy(&viewer));
   }
 
-  /* Get matrix size */
   PetscCall(MatGetSize(A, &M, &N));
-  // PetscPrintf(PETSC_COMM_SELF,
-  //               "%ld %ld\n", M, N);
 
   PetscScalar sum;
   PetscCall(MatSumEntries(A, &sum));
-
-  if (!rank) {
-    // sanity check, shows that graphs are filled with 1.0
-    printf("%ld by %ld with total sum %f\n", M, N, sum);
-  }
 
   /* Create compatible vectors */
   PetscCall(VecCreate(PETSC_COMM_WORLD, &x));
@@ -98,7 +83,6 @@ int main(int argc, char **argv)
 
   srand(42);
 
-  /* Initialize x: x[i] = i+1 (1,2,3,...) */
   PetscCall(VecGetOwnershipRange(x, &Istart, &Iend));
   for (i = Istart; i < Iend; ++i) {
     double random_decimal = (double)rand() / (double)RAND_MAX;
@@ -141,23 +125,12 @@ int main(int argc, char **argv)
     double max_s;
     MPI_Reduce(&local_s, &max_s, 1, MPI_DOUBLE, MPI_MAX, 0, PETSC_COMM_WORLD);
     total += max_s;
-    if (!rank) {
-      PetscPrintf(PETSC_COMM_SELF,
-                  "Run %d: %f\n", i, max_s);
-    }
   }
 
   if (!rank) {
       PetscPrintf(PETSC_COMM_SELF,
                   "Average: %f\n", total / NUM_RUNS);
     }
-  
-
-  /* Compute ||y|| as a small correctness check */
-  PetscCall(VecNorm(y, NORM_2, &norm));
-  if (!rank) {
-    PetscPrintf(PETSC_COMM_SELF, "||y||_2 = %g\n", (double)norm);
-  }
 
   /* Cleanup */
   PetscCall(VecDestroy(&x));
