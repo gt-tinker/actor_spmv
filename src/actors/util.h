@@ -9,7 +9,7 @@ extern "C" {
 #include <std_options.h>
 #include <iostream>
 #include <fstream>
-#define ENABLE_TCOMM_PROFILING
+// #define ENABLE_TCOMM_PROFILING
 #include "selector.h"
 #include <vector>
 #include <algorithm>
