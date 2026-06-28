@@ -46,14 +46,13 @@ int main(int argc, char* argv[]) {
         int64_t read_graph = 0L;           // read graph from a file
         char filename[512];
         Configuration config;
-        bool verify = false;
         int printhelp = 0;
         int opt; 
         while ((opt = getopt(argc, argv, "vf:p:d:m:")) != -1) {
             switch (opt) {
                 case 'h': printhelp = 1; break;
                 case 'f': read_graph = 1; sscanf(optarg,"%s", filename); break;
-                case 'v': verify = true; break;
+                case 'v': config.verify = true; break;
                 case 'p':
                     char partition_str[256];
                     sscanf(optarg,"%s", partition_str);
@@ -101,19 +100,19 @@ int main(int argc, char* argv[]) {
         }
 
         Problem* problem = read_matrix_market(filename, config);
-        lgp_barrier();
         T0_printf("Loaded: %s\n", filename);
+        lgp_barrier();
 
         if (config.format == Configuration::Format::CSC) {
             CSC* csc = new CSC(problem->rows, problem->cols, problem->local_cols, problem->coo);
             if (config.dimension == Configuration::Dimension::COLUMN) {
                 run_spmv(problem, [=](int run_number) {
                     return column_csc(problem, csc, run_number);
-                }, verify);
+                }, config.verify);
             } else if (config.dimension == Configuration::Dimension::ROW) {
                 run_spmv(problem, [=](int run_number) {
                     return row_csc(problem, csc, run_number);
-                }, verify);
+                }, config.verify);
             }
             delete csc;
         } else if (config.format == Configuration::Format::CSR) {
@@ -121,11 +120,11 @@ int main(int argc, char* argv[]) {
             if (config.dimension == Configuration::Dimension::COLUMN) {
                 run_spmv(problem, [=](int run_number) {
                     return column_csr(problem, csr, run_number);
-                }, verify);
+                }, config.verify);
             } else if (config.dimension == Configuration::Dimension::ROW) {
                 run_spmv(problem, [=](int run_number) {
                     return row_csr(problem, csr, run_number);
-                }, verify);
+                }, config.verify);
             }
             delete csr;
         }

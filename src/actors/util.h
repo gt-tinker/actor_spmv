@@ -22,6 +22,7 @@ extern "C" {
 #include "partitioning_schemes/column_block.h"
 #include "partitioning_schemes/row_cyclic.h"
 #include "partitioning_schemes/row_block.h"
+#include <cstdlib>
 
 #define THREADS shmem_n_pes()
 #define MYTHREAD shmem_my_pe()
@@ -41,6 +42,8 @@ struct Configuration {
     Partition partition;
     Dimension dimension;
     Format format;
+
+    bool verify = false;
 };
 
 struct Problem {
@@ -64,10 +67,16 @@ static bool nearly_equal(double a, double b) {
     return fabs(a - b) <= fmax(rel_tol * fmax(fabs(a), fabs(b)), abs_tol);
 }
 
-inline std::mt19937 rng(42); // seed (use fixed for reproducibility, or random_device)
-inline std::uniform_real_distribution<double> dist(0.0, 1.0);
+// Matches C-style random number generation used in petsc baseline
 inline double random_double() {
-    return dist(rng);
+    // only seeded once
+    static bool seeded = [] {
+        srand(42);
+        return true;
+    }();
+
+    (void)seeded; // avoids unused variable warning
+    return static_cast<double>(rand()) / static_cast<double>(RAND_MAX);
 }
 
 Problem* read_matrix_market(const std::string& filename, Configuration config);

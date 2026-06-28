@@ -42,6 +42,27 @@ MMType parse_matrix_market_header(std::istream& in) {
     return MMType::INVALID;
 }
 
+struct FilePkt {
+    int64_t row;
+    int64_t col;
+    double val;
+};
+
+// File reading based on https://github.com/singhalshubh/imm_hclib/blob/main/src/graph.h
+class FileSelector: public hclib::Selector<1, FilePkt> { 
+    std::vector<Coordinate>& coo_;
+public:
+    FileSelector(std::vector<Coordinate>& coo) : coo_(coo) {
+        mb[0].process = [this] (FilePkt pkt, int sender_rank) { 
+            this->req_process(pkt, sender_rank);
+        };
+    }
+
+private:
+    void req_process(FilePkt pkg, int sender_rank) {
+        coo_.push_back({ pkg.row, pkg.col, pkg.val });
+    }
+};
 
 Problem* read_matrix_market(const std::string& filename, Configuration config)
 {
@@ -49,18 +70,18 @@ Problem* read_matrix_market(const std::string& filename, Configuration config)
     int64_t m = 0;
     int64_t n = 0;
 
-    std::ifstream fin(filename);
-    if (!fin) {
+    std::ifstream file(filename);
+    if (!file) {
         std::cerr << "Failed to open file\n";
         lgp_global_exit(1);
     }
-    MMType type = parse_matrix_market_header(fin);
-    if (type != MMType::NUMERIC) {
-        T0_printf("Matrix must be numeric");
-        lgp_global_exit(1);
-    }
-    skip_mm_comments(fin);
-    fin >> m >> n >> nnz;
+    MMType type = parse_matrix_market_header(file);
+    skip_mm_comments(file);
+    std::string line;
+    std::getline(file, line);
+    std::stringstream ss(line);
+    ss >> m >> n >> nnz;
+
     if (m != n) {
         T0_printf("Matrix must be square");
         lgp_global_exit(1);
@@ -107,29 +128,96 @@ Problem* read_matrix_market(const std::string& filename, Configuration config)
         out[i] = 0.0;
         expected_output[i] = 0.0;
     }
-
     lgp_barrier();
 
-    int64_t i, j;
-    double v;
-    while (fin >> i >> j >> v) {
-        i--; j--;
-        int64_t nnz_owner = partitioner->matrix_get_owner(i, j);
-        if (nnz_owner == MYTHREAD) {
-            coo.push_back({ partitioner->matrix_row_to_local_row(i), partitioner->matrix_col_to_local_col(j), v });
+    std::streampos current = file.tellg();
+
+    FileSelector* fileSelector = new FileSelector(coo);
+    hclib::finish([&]() {
+        fileSelector->start();
+        
+        file.seekg(0, std::ios::end);
+        std::streampos file_end = file.tellg();
+        file.seekg(current);
+        std::streamoff remaining = file_end - current;
+
+        std::streamoff start =
+            current +
+            (remaining * MYTHREAD) / THREADS;
+
+        std::streamoff end =
+            current +
+            (remaining * (MYTHREAD + 1)) / THREADS;
+
+        // Number of bytes assigned to this thread
+        std::streamoff size = end - start;
+
+        file.seekg(start);
+        if (MYTHREAD != 0) {
+            file.seekg(start - 1);
+            char prev = file.get();
+            if (prev != '\n') {
+                std::getline(file, line);   // discard partial line
+            }
         }
 
-        // performing SpMV for verification
-        int64_t output_owner = partitioner->vector_get_owner(i);
-        if (output_owner == MYTHREAD) {
-            int64_t input_owner = partitioner->vector_get_owner(j);
-            int64_t remote_idx = partitioner->vector_row_to_local_row(j);
-            // std::cout << "Requesting remote index: " << remote_idx << " from PE: " << input_owner << std::endl;
-            double remote_value = shmem_double_g(&vec[remote_idx], input_owner);
-            int64_t local_row = partitioner->vector_row_to_local_row(i);
-            expected_output[local_row] += remote_value * v;
+        int64_t read_lines = 0;
+
+        while (std::getline(file, line)) {
+            FilePkt pkt;
+            std::stringstream ss(line);
+            if(type == MMType::NUMERIC) {
+                ss >> pkt.row >> pkt.col >> pkt.val;
+            }
+            else {
+                ss >> pkt.row >> pkt.col;
+                pkt.val = random_double();
+            }
+            pkt.row--;
+            pkt.col--;
+            int64_t nnz_owner = partitioner->matrix_get_owner(pkt.row, pkt.col);
+            pkt.row = partitioner->matrix_row_to_local_row(pkt.row);
+            pkt.col = partitioner->matrix_col_to_local_col(pkt.col);
+
+            fileSelector->send(0, pkt, nnz_owner);
+            read_lines++;
+
+            if (file.tellg() >= end) {
+                break;
+            }
+        }
+        fileSelector->done(0);
+    });
+    lgp_barrier();
+    delete fileSelector;
+
+    if (config.verify) {
+        if (type != MMType::NUMERIC) {
+            T0_printf("Can only verify numeric matrices");
+            lgp_global_exit(1);
+        }
+        file.clear();
+        file.seekg(current);
+        
+        int64_t i, j;
+        double v;
+        while (std::getline(file, line)) {
+            std::stringstream ss(line);
+            ss >> i >> j >> v;
+            i--; j--;
+
+            // performing SpMV for verification
+            int64_t output_owner = partitioner->vector_get_owner(i);
+            if (output_owner == MYTHREAD) {
+                int64_t input_owner = partitioner->vector_get_owner(j);
+                int64_t remote_idx = partitioner->vector_row_to_local_row(j);
+                double remote_value = shmem_double_g(&vec[remote_idx], input_owner);
+                int64_t local_row = partitioner->vector_row_to_local_row(i);
+                expected_output[local_row] += remote_value * v;
+            }
         }
     }
+    lgp_barrier();
 
     if (config.dimension == Configuration::Dimension::ROW) {
         std::sort(coo.begin(), coo.end(), [](const Coordinate& a, const Coordinate& b) {
