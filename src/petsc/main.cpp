@@ -4,7 +4,7 @@
 #include <mpi.h>
 #include <stdlib.h>
 
-#define NUM_RUNS 10
+#define NUM_RUNS 1
 
 PetscErrorCode MatSumEntries(Mat A, PetscScalar *sum)
 {
@@ -71,6 +71,9 @@ int main(int argc, char **argv)
   }
 
   PetscCall(MatGetSize(A, &M, &N));
+  MatInfo info;
+  PetscCall(MatGetInfo(A, MAT_GLOBAL_SUM, &info));
+  if (!rank) PetscPrintf(PETSC_COMM_SELF, "Vertices: %lld  Edges: %lld\n", (long long)M, (long long)(PetscInt)info.nz_used);
 
   PetscScalar sum;
   PetscCall(MatSumEntries(A, &sum));
@@ -99,15 +102,14 @@ int main(int argc, char **argv)
 
   MPI_Barrier(PETSC_COMM_WORLD);
 
-  // warmup
-  for (int i = 0; i < NUM_RUNS; i++) {
-    PetscCall(MatMult(A, x, y));
-    MPI_Barrier(PETSC_COMM_WORLD);
-  }
+  // for (int i = 0; i < NUM_RUNS; i++) {
+  //   PetscCall(MatMult(A, x, y));
+  //   MPI_Barrier(PETSC_COMM_WORLD);
+  // }
 
   PetscLogStage stage;
 
-  double total = 0;
+  double total = PETSC_INT_MAX;
 
   for (int i = 0; i < NUM_RUNS; i++) {
     char buf[50];
@@ -115,21 +117,20 @@ int main(int argc, char **argv)
     PetscLogStageRegister(buf, &stage);
     PetscLogStagePush(stage);
 
-    double t0 = MPI_Wtime();
-    PetscCall(MatMult(A, x, y));
-    PetscLogStagePop();
     MPI_Barrier(PETSC_COMM_WORLD);
+    double t0 = MPI_Wtime();
+    
+      PetscCall(MatMult(A, x, y));
+      MPI_Barrier(PETSC_COMM_WORLD);
     double t1 = MPI_Wtime();
-
-    double local_s = (t1 - t0);
-    double max_s;
-    MPI_Reduce(&local_s, &max_s, 1, MPI_DOUBLE, MPI_MAX, 0, PETSC_COMM_WORLD);
-    total += max_s;
+    
+    PetscLogStagePop();
+    total = std::min(total, (t1 - t0));
   }
 
   if (!rank) {
       PetscPrintf(PETSC_COMM_SELF,
-                  "Average: %f\n", total / NUM_RUNS);
+                  "Minimum across all runs: %8.3f\n", total);
     }
 
   /* Cleanup */

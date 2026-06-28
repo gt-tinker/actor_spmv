@@ -124,7 +124,7 @@ int main(int argc, char* argv[]) {
                 }, verify);
             } else if (config.dimension == Configuration::Dimension::ROW) {
                 run_spmv(problem, [=](int run_number) {
-                    return row_csr(problem, csr, run_number);
+                    return row_csr_opt(problem, csr, run_number);
                 }, verify);
             }
             delete csr;

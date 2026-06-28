@@ -25,7 +25,7 @@ extern "C" {
 
 #define THREADS shmem_n_pes()
 #define MYTHREAD shmem_my_pe()
-#define NUM_RUNS 10
+#define NUM_RUNS 1
 
 struct Coordinate {
     int64_t row;

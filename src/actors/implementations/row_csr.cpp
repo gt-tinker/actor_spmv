@@ -5,11 +5,12 @@
 double row_csr(Problem* problem, CSR* mtx, int run_number) 
 {
     double t1 = wall_seconds();
-
+    uint64_t comm_vol = 0;
     PullSelector* spSelector = new PullSelector(problem);
-    hclib::finish([=]() 
+    hclib::finish([&]() 
     {
         spSelector->start();
+        //comm_vol = 0;
 
         PullPkt pkg;
         for (int64_t i = 0; i < mtx->local_rows; i++) {
@@ -24,6 +25,7 @@ double row_csr(Problem* problem, CSR* mtx, int run_number)
                     pkg.lrow = i;
                     pkg.col = col;
                     spSelector->send(REQUEST, pkg, owner);
+                    //comm_vol += 1;
                 }
             }
         }
@@ -42,5 +44,7 @@ double row_csr(Problem* problem, CSR* mtx, int run_number)
     #endif
 
     delete spSelector;
+    // uint64_t total_comm = lgp_reduce_add_l(comm_vol);
+    // T0_fprintf(stderr, "Vol: %ld bytes\n", total_comm*sizeof(PullPkt));
     return t1;
 }
