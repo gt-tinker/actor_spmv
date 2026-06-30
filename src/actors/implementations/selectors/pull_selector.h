@@ -13,7 +13,8 @@ enum MailBoxType {REQUEST, RESPONSE};
 
 class PullSelector: public hclib::Selector<2, PullPkt> {
 public:
-    PullSelector(Problem* problem) : problem_(problem) {
+    PullSelector(Problem* problem) : 
+    hclib::Selector<2, PullPkt>(true), problem_(problem) {
         mb[REQUEST].process = [this] (PullPkt pkt, int sender_rank) { 
             this->req_process(pkt, sender_rank);
         };

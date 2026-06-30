@@ -24,11 +24,11 @@ void run_spmv(Problem* problem, const std::function<double(int)>& spmv, bool ver
     }
 
     double laptime = 0.0;
-    T0_fprintf(stderr, "Warm up: \n");
-    for (int i = 0; i < NUM_RUNS; i++) {
-        double run = spmv(-1);
-        T0_fprintf(stdout, "Warmup %i: %lf\n", i, run);
-    }
+    // T0_fprintf(stderr, "Warm up: \n");
+    // for (int i = 0; i < NUM_RUNS; i++) {
+    //     double run = spmv(-1);
+    //     T0_fprintf(stdout, "Warmup %i: %lf\n", i, run);
+    // }
     T0_fprintf(stderr, "Experiment: \n");
     for (int i = 0; i < NUM_RUNS; i++) {
         double run = spmv(i);
@@ -124,7 +124,7 @@ int main(int argc, char* argv[]) {
                 }, verify);
             } else if (config.dimension == Configuration::Dimension::ROW) {
                 run_spmv(problem, [=](int run_number) {
-                    return row_csr_opt(problem, csr, run_number);
+                    return row_csr(problem, csr, run_number);
                 }, verify);
             }
             delete csr;

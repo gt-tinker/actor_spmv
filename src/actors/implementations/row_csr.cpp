@@ -4,12 +4,13 @@
 
 double row_csr(Problem* problem, CSR* mtx, int run_number) 
 {
-    double t1 = wall_seconds();
     uint64_t comm_vol = 0;
+    double t1 = wall_seconds();
     PullSelector* spSelector = new PullSelector(problem);
+    T0_fprintf(stderr, "time: %8.3lf\n", wall_seconds() - t1);
+    t1 = wall_seconds();
     hclib::finish([&]() 
     {
-        spSelector->start();
         //comm_vol = 0;
 
         PullPkt pkg;
@@ -32,7 +33,7 @@ double row_csr(Problem* problem, CSR* mtx, int run_number)
 
         spSelector->done(REQUEST);
     });
-    lgp_barrier();
+    
     t1 = wall_seconds() - t1;
 
     #ifdef ENABLE_TCOMM_PROFILING
