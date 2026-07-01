@@ -18,5 +18,5 @@ make
 
 ### Example: Row cyclic CSR
 ```
-./main -f ../../datasets/data.mtx -v -d row -p cyclic -m csr
+srun --cpu-bind=core ./main -f ../../datasets/data.mtx -v -d row -p cyclic -m csr
 ```

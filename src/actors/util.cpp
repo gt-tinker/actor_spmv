@@ -6,12 +6,17 @@ enum class MMType {
     INVALID
 };
 
+enum class SymmetryType {
+    GENERAL,
+    SYMMETRIC
+};
+
 void skip_mm_comments(std::ifstream& fin) {
     while (fin.peek() == '%')
         fin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 }
 
-MMType parse_matrix_market_header(std::istream& in) {
+std::pair<MMType, SymmetryType> parse_matrix_market_header(std::istream& in) {
     std::string line;
 
     // Read first non-empty line
@@ -21,7 +26,7 @@ MMType parse_matrix_market_header(std::istream& in) {
     }
 
     if (line.rfind("%%MatrixMarket", 0) != 0) {
-        return MMType::INVALID;
+        return std::make_pair(MMType::INVALID, SymmetryType::GENERAL);
     }
 
     std::istringstream iss(line);
@@ -30,16 +35,22 @@ MMType parse_matrix_market_header(std::istream& in) {
     iss >> banner >> object >> format >> field >> symmetry;
 
     if (banner != "%%MatrixMarket" || object != "matrix") {
-        return MMType::INVALID;
+        return std::make_pair(MMType::INVALID, SymmetryType::GENERAL);
     }
 
+    MMType type = MMType::INVALID;
     if (field == "pattern") {
-        return MMType::PATTERN;
+        type = MMType::PATTERN;
     } else if (field == "real" || field == "integer" || field == "complex") {
-        return MMType::NUMERIC;
+        type = MMType::NUMERIC;
     }
 
-    return MMType::INVALID;
+    SymmetryType symmetry_type = SymmetryType::GENERAL;
+    if (symmetry == "symmetric") {
+        symmetry_type = SymmetryType::SYMMETRIC;
+    }
+
+    return std::make_pair(type, symmetry_type);
 }
 
 struct FilePkt {
@@ -75,12 +86,13 @@ Problem* read_matrix_market(const std::string& filename, Configuration config)
         std::cerr << "Failed to open file\n";
         lgp_global_exit(1);
     }
-    MMType type = parse_matrix_market_header(file);
+    auto [type, symmetry_type] = parse_matrix_market_header(file);
     skip_mm_comments(file);
     std::string line;
     std::getline(file, line);
     std::stringstream ss(line);
     ss >> m >> n >> nnz;
+    // T0_printf("Matrix dimensions: %ld x %ld, nnz: %ld\n", m, n, nnz);
 
     if (m != n) {
         T0_printf("Matrix must be square");
@@ -161,26 +173,32 @@ Problem* read_matrix_market(const std::string& filename, Configuration config)
             }
         }
 
-        int64_t read_lines = 0;
-
         while (std::getline(file, line)) {
             FilePkt pkt;
             std::stringstream ss(line);
+            int64_t row, col;
             if(type == MMType::NUMERIC) {
-                ss >> pkt.row >> pkt.col >> pkt.val;
+                ss >> row >> col >> pkt.val;
             }
             else {
-                ss >> pkt.row >> pkt.col;
+                ss >> row >> col;
                 pkt.val = random_double();
             }
-            pkt.row--;
-            pkt.col--;
-            int64_t nnz_owner = partitioner->matrix_get_owner(pkt.row, pkt.col);
-            pkt.row = partitioner->matrix_row_to_local_row(pkt.row);
-            pkt.col = partitioner->matrix_col_to_local_col(pkt.col);
-
+            row--;
+            col--;
+            int64_t nnz_owner = partitioner->matrix_get_owner(row, col);
+            pkt.row = partitioner->matrix_row_to_local_row(row);
+            pkt.col = partitioner->matrix_col_to_local_col(col);
             fileSelector->send(0, pkt, nnz_owner);
-            read_lines++;
+
+            if (symmetry_type == SymmetryType::SYMMETRIC && row != col) {
+                FilePkt sym_pkt;
+                sym_pkt.row = partitioner->matrix_row_to_local_row(col);
+                sym_pkt.col = partitioner->matrix_col_to_local_col(row);
+                sym_pkt.val = pkt.val;
+                int64_t sym_nnz_owner = partitioner->matrix_get_owner(col, row);
+                fileSelector->send(0, sym_pkt, sym_nnz_owner);
+            }
 
             if (file.tellg() >= end) {
                 break;
@@ -214,6 +232,17 @@ Problem* read_matrix_market(const std::string& filename, Configuration config)
                 double remote_value = shmem_double_g(&vec[remote_idx], input_owner);
                 int64_t local_row = partitioner->vector_row_to_local_row(i);
                 expected_output[local_row] += remote_value * v;
+            }
+
+            if (symmetry_type == SymmetryType::SYMMETRIC && i != j) {
+                int64_t output_owner_sym = partitioner->vector_get_owner(j);
+                if (output_owner_sym == MYTHREAD) {
+                    int64_t input_owner_sym = partitioner->vector_get_owner(i);
+                    int64_t remote_idx_sym = partitioner->vector_row_to_local_row(i);
+                    double remote_value_sym = shmem_double_g(&vec[remote_idx_sym], input_owner_sym);
+                    int64_t local_row_sym = partitioner->vector_row_to_local_row(j);
+                    expected_output[local_row_sym] += remote_value_sym * v;
+                }
             }
         }
     }
