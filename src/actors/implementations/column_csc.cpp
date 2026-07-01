@@ -12,7 +12,7 @@ double column_csc(Problem* problem, CSC* mtx, int run_number)
         spSelector->start();
 
         PushPkt pkg;
-        for (int64_t i = 0; i < mtx->local_cols; i++) {
+        for (int64_t i = 0; i < problem->local_cols; i++) {
             double matching_vec_val = problem->vec[i];
             
             for(int64_t j = mtx->colptr[i]; j < mtx->colptr[i+1]; j++) {

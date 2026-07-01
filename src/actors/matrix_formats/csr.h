@@ -2,21 +2,12 @@
 #define CSR_H
 
 struct CSR {
-    int64_t global_rows;      // global row count
-    int64_t local_rows;
-    int64_t global_cols;      // local column count
-    int64_t local_cols;
-
     std::vector<int64_t> rowptr;
     std::vector<int64_t> colind;
     std::vector<double> vals;
 
-    CSR(int64_t m, int64_t n, int64_t local_rows, std::vector<Coordinate>& coo) {
-        global_rows = m;
-        global_cols = n;
-        this->local_rows = local_rows;
-        local_cols = n;
-        rowptr.assign(local_rows + 1, 0);
+    CSR(std::vector<Coordinate>& coo) {
+        rowptr.assign(coo.size() + 1, 0);
 
         for (int64_t p = 0; p < coo.size(); ++p)
             rowptr[coo[p].row + 1]++;

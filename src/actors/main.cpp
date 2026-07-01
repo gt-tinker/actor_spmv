@@ -1,6 +1,8 @@
 #include "util.h"
 #include "matrix_formats/csc.h"
 #include "matrix_formats/csr.h"
+#include "matrix_formats/dcsr.h"
+#include "matrix_formats/dcsc.h"
 #include "implementations/implementations.h"
 
 void run_spmv(Problem* problem, const std::function<double(int)>& spmv, bool verify) {
@@ -100,35 +102,39 @@ int main(int argc, char* argv[]) {
         }
 
         Problem* problem = read_matrix_market(filename, config);
+        T0_printf("%ld %ld %ld\n", problem->local_rows, problem->local_cols, problem->local_vector_size);
         T0_printf("Loaded: %s\n", filename);
         lgp_barrier();
 
         if (config.format == Configuration::Format::CSC) {
-            CSC* csc = new CSC(problem->rows, problem->cols, problem->local_cols, problem->coo);
             if (config.dimension == Configuration::Dimension::COLUMN) {
+                CSC* csc = new CSC(problem->coo);
                 run_spmv(problem, [=](int run_number) {
                     return column_csc(problem, csc, run_number);
                 }, config.verify);
+                delete csc;
             } else if (config.dimension == Configuration::Dimension::ROW) {
+                DCSC* dcsc = new DCSC(problem->coo);
                 run_spmv(problem, [=](int run_number) {
-                    return row_csc(problem, csc, run_number);
+                    return row_csc(problem, dcsc, run_number);
                 }, config.verify);
+                delete dcsc;
             }
-            delete csc;
         } else if (config.format == Configuration::Format::CSR) {
-            CSR* csr = new CSR(problem->rows, problem->cols, problem->local_rows, problem->coo);
             if (config.dimension == Configuration::Dimension::COLUMN) {
+                DCSR* dcsr = new DCSR(problem->coo);
                 run_spmv(problem, [=](int run_number) {
-                    return column_csr(problem, csr, run_number);
+                    return column_csr(problem, dcsr, run_number);
                 }, config.verify);
+                delete dcsr;
             } else if (config.dimension == Configuration::Dimension::ROW) {
+                CSR* csr = new CSR(problem->coo);
                 run_spmv(problem, [=](int run_number) {
                     return row_csr(problem, csr, run_number);
                 }, config.verify);
+                delete csr;
             }
-            delete csr;
-        }
-        
+        }      
 
         lgp_barrier();
         delete problem;

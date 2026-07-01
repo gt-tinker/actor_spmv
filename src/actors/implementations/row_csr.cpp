@@ -12,7 +12,7 @@ double row_csr(Problem* problem, CSR* mtx, int run_number)
         spSelector->start();
 
         PullPkt pkg;
-        for (int64_t i = 0; i < mtx->local_rows; i++) {
+        for (int64_t i = 0; i < problem->local_rows; i++) {
             for(int64_t j = mtx->rowptr[i]; j < mtx->rowptr[i+1]; j++) {
                 double val = mtx->vals[j];
                 int64_t col = mtx->colind[j];
