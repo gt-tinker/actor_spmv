@@ -108,7 +108,7 @@ int main(int argc, char* argv[]) {
 
         if (config.format == Configuration::Format::CSC) {
             if (config.dimension == Configuration::Dimension::COLUMN) {
-                CSC* csc = new CSC(problem->coo);
+                CSC* csc = new CSC(problem->local_cols, problem->coo);
                 run_spmv(problem, [=](int run_number) {
                     return column_csc(problem, csc, run_number);
                 }, config.verify);
@@ -128,7 +128,7 @@ int main(int argc, char* argv[]) {
                 }, config.verify);
                 delete dcsr;
             } else if (config.dimension == Configuration::Dimension::ROW) {
-                CSR* csr = new CSR(problem->coo);
+                CSR* csr = new CSR(problem->local_rows, problem->coo);
                 run_spmv(problem, [=](int run_number) {
                     return row_csr(problem, csr, run_number);
                 }, config.verify);
