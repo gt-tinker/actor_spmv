@@ -6,35 +6,6 @@
 
 #define NUM_RUNS 10
 
-PetscErrorCode MatSumEntries(Mat A, PetscScalar *sum)
-{
-    PetscErrorCode ierr;
-    PetscInt i, rstart, rend, ncols;
-    const PetscInt *cols;
-    const PetscScalar *vals;
-    PetscScalar local_sum = 0.0, global_sum = 0.0;
-
-    ierr = MatGetOwnershipRange(A, &rstart, &rend); CHKERRQ(ierr);
-
-    for (i = rstart; i < rend; i++) {
-        ierr = MatGetRow(A, i, &ncols, &cols, &vals); CHKERRQ(ierr);
-
-        for (PetscInt j = 0; j < ncols; j++) {
-            local_sum += vals[j];
-        }
-
-        ierr = MatRestoreRow(A, i, &ncols, &cols, &vals); CHKERRQ(ierr);
-    }
-
-    ierr = MPI_Allreduce(&local_sum, &global_sum, 1,
-                         MPIU_SCALAR, MPIU_SUM,
-                         PetscObjectComm((PetscObject)A)); CHKERRQ(ierr);
-
-    *sum = global_sum;
-
-    return 0;
-}
-
 int main(int argc, char **argv)
 {
   Mat            A;
@@ -72,9 +43,6 @@ int main(int argc, char **argv)
 
   PetscCall(MatGetSize(A, &M, &N));
 
-  PetscScalar sum;
-  PetscCall(MatSumEntries(A, &sum));
-
   /* Create compatible vectors */
   PetscCall(VecCreate(PETSC_COMM_WORLD, &x));
   PetscCall(VecSetSizes(x, PETSC_DECIDE, N));
@@ -111,7 +79,7 @@ int main(int argc, char **argv)
 
   for (int i = 0; i < NUM_RUNS; i++) {
     char buf[50];
-    snprintf(buf, 12, "SpMV %d", i);
+    snprintf(buf, sizeof(buf), "SpMV %d", i);
     PetscLogStageRegister(buf, &stage);
     PetscLogStagePush(stage);
 
@@ -125,6 +93,11 @@ int main(int argc, char **argv)
     double max_s;
     MPI_Reduce(&local_s, &max_s, 1, MPI_DOUBLE, MPI_MAX, 0, PETSC_COMM_WORLD);
     total += max_s;
+    if (!rank) {
+        PetscPrintf(PETSC_COMM_SELF,
+                  "Iter %d: time=%f s\n",
+                  i, max_s);
+    }
   }
 
   if (!rank) {
