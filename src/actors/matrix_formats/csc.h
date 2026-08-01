@@ -6,8 +6,8 @@ struct CSC {
     std::vector<int64_t> rowind;
     std::vector<double> vals;
 
-    CSC(std::vector<Coordinate>& coo) {
-        colptr.assign(coo.size() + 1, 0);
+    CSC(int64_t local_cols, std::vector<Coordinate>& coo) {
+        colptr.assign(local_cols + 1, 0);
 
         for (int64_t p = 0; p < coo.size(); ++p)
             colptr[coo[p].col + 1]++;

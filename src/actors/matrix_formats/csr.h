@@ -6,8 +6,8 @@ struct CSR {
     std::vector<int64_t> colind;
     std::vector<double> vals;
 
-    CSR(std::vector<Coordinate>& coo) {
-        rowptr.assign(coo.size() + 1, 0);
+    CSR(int64_t local_rows, std::vector<Coordinate>& coo) {
+        rowptr.assign(local_rows + 1, 0);
 
         for (int64_t p = 0; p < coo.size(); ++p)
             rowptr[coo[p].row + 1]++;
