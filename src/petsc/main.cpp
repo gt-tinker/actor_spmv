@@ -40,6 +40,9 @@ int main(int argc, char **argv)
     PetscCall(MatLoad(A, viewer));
     PetscCall(PetscViewerDestroy(&viewer));
   }
+  if (!rank) {
+    PetscPrintf(PETSC_COMM_SELF, "Loaded: %s\n", filename);
+  }
 
   PetscCall(MatGetSize(A, &M, &N));
 
@@ -67,11 +70,15 @@ int main(int argc, char **argv)
 
   MPI_Barrier(PETSC_COMM_WORLD);
 
+  if (!rank) PetscPrintf(PETSC_COMM_SELF, "Warm up: \n");
+
   // warmup
   for (int i = 0; i < NUM_RUNS; i++) {
     PetscCall(MatMult(A, x, y));
     MPI_Barrier(PETSC_COMM_WORLD);
   }
+
+  if (!rank) PetscPrintf(PETSC_COMM_SELF, "Experiment: \n");
 
   PetscLogStage stage;
 
@@ -95,7 +102,7 @@ int main(int argc, char **argv)
     total += max_s;
     if (!rank) {
         PetscPrintf(PETSC_COMM_SELF,
-                  "Iter %d: time=%f s\n",
+                  "Run %d: %f\n",
                   i, max_s);
     }
   }
