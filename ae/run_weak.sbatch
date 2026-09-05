@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=spmv_weak
-#SBATCH -t60
+#SBATCH -t120
 #SBATCH -q inferno
 #SBATCH --mem-per-cpu=8G
 #SBATCH --partition=cpu-small
